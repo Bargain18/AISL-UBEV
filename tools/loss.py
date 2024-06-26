@@ -88,19 +88,5 @@ def entropy_reg(alpha, beta_reg=.001):
     return -beta_reg * reg
 
 
-def ood_reg(alpha, ood):
-    if ood.long().sum() == 0:
-        return 0
-
-    alpha = alpha.permute(0, 2, 3, 1)
-
-    alpha_d = D.Dirichlet(alpha)
-    target_d = D.Dirichlet(torch.ones_like(alpha))
-
-    reg = D.kl.kl_divergence(alpha_d, target_d).unsqueeze(1)
-
-    return reg[ood.bool()].mean()
-
-
 def gamma(x):
     return torch.exp(torch.lgamma(x))

@@ -11,7 +11,6 @@ import yaml
 from tqdm import tqdm
 
 from datasets.carla import compile_data as compile_data_carla
-from datasets.lyft import compile_data as compile_data_lyft
 from datasets.nuscenes import compile_data as compile_data_nuscenes
 from models.baseline import Baseline
 from models.dropout import Dropout
@@ -35,7 +34,6 @@ models = {
 datasets = {
     'nuscenes': compile_data_nuscenes,
     'carla': compile_data_carla,
-    'lyft': compile_data_lyft,
 }
 
 n_classes, classes = 2, ["vehicle", "background"]
@@ -63,31 +61,22 @@ def change_params(config):
     return classes, n_classes, weights
 
 
-@torch.no_grad()
+@torch.inference_mode()
 def run_loader(model, loader):
     predictions = []
     ground_truth = []
-    oods = []
-    aleatoric = []
-    epistemic = []
     raw = []
 
-    with torch.no_grad():
-        for images, intrinsics, extrinsics, labels, ood in tqdm(loader, desc="Running validation"):
+    with torch.inference_mode():
+        for images, intrinsics, extrinsics, labels in tqdm(loader, desc="Running validation"):
             outs = model(images, intrinsics, extrinsics).detach().cpu()
 
             predictions.append(model.activate(outs))
             ground_truth.append(labels)
-            oods.append(ood)
-            aleatoric.append(model.aleatoric(outs))
-            epistemic.append(model.epistemic(outs))
             raw.append(outs)
 
     return (torch.cat(predictions, dim=0),
             torch.cat(ground_truth, dim=0),
-            torch.cat(oods, dim=0),
-            torch.cat(aleatoric, dim=0),
-            torch.cat(epistemic, dim=0),
             torch.cat(raw, dim=0))
 
 
@@ -103,22 +92,6 @@ def map_rgb(onehot, ego=False):
 
     return rgb
 
-
-def save_unc(u_score, u_true, out_path, score_name, true_name):
-    u_score = u_score.detach().cpu().numpy()
-    u_true = u_true.numpy()
-
-    cv2.imwrite(
-        os.path.join(out_path, true_name),
-        u_true[0, 0] * 255
-    )
-
-    cv2.imwrite(
-        os.path.join(out_path, score_name),
-        cv2.cvtColor((plt.cm.inferno(u_score[0, 0]) * 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
-    )
-
-
 def save_pred(pred, label, out_path, ego=False):
     if pred.shape[1] != 2:
         pred = map_rgb(pred[0], ego=ego)
@@ -129,12 +102,7 @@ def save_pred(pred, label, out_path, ego=False):
         return pred, label
     else:
         cv2.imwrite(os.path.join(out_path, "pred.png"), pred[0, 0].detach().cpu().numpy() * 255)
-        cv2.imwrite(os.path.join(out_path, "label.png"), label[0, 0].detach().cpu().numpy() * 255)
-
-
-def get_mis(pred, label):
-    return (pred.argmax(dim=1) != label.argmax(dim=1)).unsqueeze(1)
-
+        cv2.imwrite(os.path.join(out_path, "label.png"), label[0,0].detach().cpu().numpy() * 255)
 
 def get_config(args):
     with open(args.config, 'r') as file:

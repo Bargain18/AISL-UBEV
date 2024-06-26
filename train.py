@@ -1,5 +1,6 @@
 import argparse
 import random
+import tqdm
 from time import sleep, time
 
 from tensorboardX import SummaryWriter
@@ -16,7 +17,7 @@ torch.backends.cudnn.allow_tf32 = True
 torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.enabled = True
 
-print(torch.__version__)
+print(f'Torch version: {torch.__version__}')
 
 
 def train():
@@ -25,43 +26,23 @@ def train():
     if config['loss'] == 'focal':
         config['learning_rate'] *= 4
 
-    if config['ood']:
-        if config['stable']:
-            train_set = "train_aug_stable"
-            val_set = "val_aug_stable"
-        else:
-            train_set = "train_comb"
-            val_set = "val_comb"
-    else:
-        train_set = "train"
-        val_set = "val"
-
-    if 'train_set' in config:
-        train_set = config['train_set']
-    if 'val_set' in config:
-        val_set = config['val_set']
-
-    if config['backbone'] == 'lss':
-        yaw = 0
-    elif config['backbone'] == 'cvt':
+    if config['backbone'] == 'cvt':
         yaw = 180
 
-    train_loader = datasets[config['dataset']](
-        train_set, split, dataroot, config['pos_class'],
+    train_loader = datasets['carla'](
+        "train", dataroot, config['pos_class'],
         batch_size=config['batch_size'],
         num_workers=config['num_workers'],
         is_train=True,
-        seed=config['seed'],
-        yaw=yaw
+        seed=config['seed']
     )
 
-    val_loader = datasets[config['dataset']](
-        val_set, split, dataroot, config['pos_class'],
+    val_loader = datasets['carla'](
+        "val", dataroot, config['pos_class'],
         batch_size=config['batch_size'],
         num_workers=config['num_workers'],
         is_train=False,
-        seed=config['seed'],
-        yaw=yaw
+        seed=config['seed']
     )
 
     model = models[config['type']](
@@ -77,6 +58,12 @@ def train():
         lr=config['learning_rate'],
         weight_decay=config['weight_decay']
     )
+    
+    # model.opt = torch.optim.SGD(
+    #     model.parameters(),
+    #     lr=config['learning_rate'],
+    #     weight_decay=config['weight_decay'],
+    # )
 
     if 'pretrained' in config:
         model.load(torch.load(config['pretrained']))
@@ -96,10 +83,6 @@ def train():
     if 'gamma' in config:
         model.gamma = config['gamma']
         print(f"GAMMA: {model.gamma}")
-
-    if 'ol' in config:
-        model.ood_lambda = config['ol']
-        print(f"OOD LAMBDA: {model.ood_lambda}")
 
     if 'k' in config:
         model.k = config['k']
@@ -136,14 +119,10 @@ def train():
 
         writer.add_scalar('train/epoch', epoch, step)
 
-        for images, intrinsics, extrinsics, labels, ood in train_loader:
+        for images, intrinsics, extrinsics, labels in tqdm(train_loader):
             t_0 = time()
-            ood_loss = None
 
-            if config['ood']:
-                outs, preds, loss, ood_loss = model.train_step_ood(images, intrinsics, extrinsics, labels, ood)
-            else:
-                outs, preds, loss = model.train_step(images, intrinsics, extrinsics, labels)
+            outs, preds, loss = model.train_step(images, intrinsics, extrinsics, labels)
 
             step += 1
 
@@ -156,12 +135,6 @@ def train():
                 writer.add_scalar('train/step_time', time() - t_0, step)
                 writer.add_scalar('train/loss', loss, step)
 
-                if ood_loss is not None:
-                    writer.add_scalar('train/ood_loss', ood_loss, step)
-                    writer.add_scalar('train/id_loss', loss-ood_loss, step)
-
-                if config['ood']:
-                    save_unc(model.epistemic(outs) / model.epistemic(outs).max(), ood, config['logdir'], "epistemic.png", "ood.png")
                 save_pred(preds, labels, config['logdir'])
 
             if step % 50 == 0:
@@ -174,7 +147,8 @@ def train():
 
         model.eval()
 
-        predictions, ground_truth, oods, aleatoric, epistemic, raw = run_loader(model, val_loader)
+        predictions, ground_truth, raw = run_loader(
+            model, val_loader)
         iou = get_iou(predictions, ground_truth)
 
         for i in range(0, n_classes):
@@ -182,58 +156,23 @@ def train():
 
         print(f"Validation mIOU: {iou}")
 
-        ood_loss = None
+        n_samples = len(raw)
+        val_loss = 0
 
-        if config['ood']:
-            n_samples = len(raw)
-            val_loss = 0
-            ood_loss = 0
+        for i in range(0, n_samples, config['batch_size']):
+            raw_batch = raw[i:i + config['batch_size']].to(model.device)
+            ground_truth_batch = ground_truth[i:i +
+                                              config['batch_size']].to(model.device)
 
-            for i in range(0, n_samples, config['batch_size']):
-                raw_batch = raw[i:i + config['batch_size']].to(model.device)
-                ground_truth_batch = ground_truth[i:i + config['batch_size']].to(model.device)
-                oods_batch = oods[i:i + config['batch_size']].to(model.device)
+            vl = model.loss(raw_batch, ground_truth_batch)
 
-                vl, ol = model.loss_ood(raw_batch, ground_truth_batch, oods_batch)
+            val_loss += vl
 
-                val_loss += vl
-                ood_loss += ol
+        val_loss /= (n_samples / config['batch_size'])
 
-            val_loss /= (n_samples / config['batch_size'])
-            ood_loss /= (n_samples / config['batch_size'])
+        writer.add_scalar(f"val/loss", val_loss, epoch)
 
-            writer.add_scalar('val/ood_loss', ood_loss, epoch)
-            writer.add_scalar(f"val/loss", val_loss, epoch)
-            writer.add_scalar(f"val/uce_loss", val_loss - ood_loss, epoch)
-
-            uncertainty_scores = epistemic[:256].squeeze(1)
-            uncertainty_labels = oods[:256].bool()
-
-            fpr, tpr, rec, pr, auroc, aupr, _ = roc_pr(uncertainty_scores, uncertainty_labels)
-            writer.add_scalar(f"val/ood_auroc", auroc, epoch)
-            writer.add_scalar(f"val/ood_aupr", aupr, epoch)
-
-            print(f"Validation OOD: AUPR={aupr}, AUROC={auroc}")
-        else:
-            n_samples = len(raw)
-            val_loss = 0
-
-            for i in range(0, n_samples, config['batch_size']):
-                raw_batch = raw[i:i + config['batch_size']].to(model.device)
-                ground_truth_batch = ground_truth[i:i + config['batch_size']].to(model.device)
-
-                vl = model.loss(raw_batch, ground_truth_batch)
-
-                val_loss += vl
-
-            val_loss /= (n_samples / config['batch_size'])
-
-            writer.add_scalar(f"val/loss", val_loss, epoch)
-
-        if ood_loss is not None:
-            print(f"Validation loss: {val_loss}, OOD Reg.: {ood_loss}")
-        else:
-            print(f"Validation loss: {val_loss}")
+        print(f"Validation loss: {val_loss}")
 
         model.save(os.path.join(config['logdir'], f'{epoch}.pt'))
 
@@ -246,17 +185,19 @@ if __name__ == "__main__":
     parser.add_argument('-g', '--gpus', nargs='+', required=False, type=int)
     parser.add_argument('-l', '--logdir', required=False, type=str)
     parser.add_argument('-b', '--batch_size', required=False, type=int)
-    parser.add_argument('-s', '--split', default="trainval", required=False, type=str)
+    parser.add_argument('-s', '--split', default="trainval",
+                        required=False, type=str)
 
-    parser.add_argument( '--train_set', required=False, type=str)
-    parser.add_argument( '--val_set', required=False, type=str)
+    parser.add_argument('--train_set', required=False, type=str)
+    parser.add_argument('--val_set', required=False, type=str)
 
     parser.add_argument('-p', '--pretrained', required=False, type=str)
     parser.add_argument('-o', '--ood', default=False, action='store_true')
     parser.add_argument('-e', '--num_epochs', required=False, type=int)
-    parser.add_argument('-c', '--pos_class', default="vehicle", required=False, type=str)
+    parser.add_argument('-c', '--pos_class',
+                        default="vehicle", required=False, type=str)
     parser.add_argument('-f', '--fast', default=False, action='store_true')
-    
+
     parser.add_argument('--seed', default=0, required=False, type=int)
     parser.add_argument('--stable', default=False, action='store_true')
 
@@ -301,6 +242,6 @@ if __name__ == "__main__":
         torch.inverse(torch.ones((1, 1), device=gpu))
 
     split = args.split
-    dataroot = f"../data/{config['dataset']}"\
+    dataroot = "data"
 
     train()

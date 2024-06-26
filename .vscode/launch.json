@@ -1,0 +1,24 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        
+        {
+            "name": "Train Carla",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "train.py",
+            "console": "integratedTerminal",
+            "args": "./configs/train_carla_cvt_baseline.yaml"
+        },
+
+        {
+            "name": "Eval Carla",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "eval.py",
+            "console": "integratedTerminal",
+            "args": "./configs/eval_carla_cvt_baseline.yaml"
+        }
+        
+    ]
+}

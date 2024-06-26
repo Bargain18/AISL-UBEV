@@ -3,44 +3,6 @@ import matplotlib.pyplot as plt
 
 from tools.metrics import *
 
-
-def plot_patch(y_score, y_true, title=None, exclude=None, axs=None, quantile=True):
-    pavpu, agc, ugi, thresholds, au_pavpu, au_agc, au_ugi = patch_metrics(y_score, y_true, quantile=quantile)
-
-    if axs is None:
-        gen_new = True
-        fig, axs = plt.subplots(1, 3, figsize=(18, 6))
-    else:
-        gen_new = False
-
-    axs[0].plot(thresholds, agc, 'g.-', label=f"AU-p(accurate|certain): {au_agc:.3f}")
-    axs[0].set_xlabel('Uncertainty Threshold')
-    axs[0].set_ylabel('p(accurate|certain)')
-    axs[0].legend(frameon=True)
-    axs[0].set_ylim(-0.05, 1.05)
-
-    axs[1].plot(thresholds, ugi, 'r.-', label=f"AU-p(uncertain|inaccurate): {au_ugi:.3f}")
-    axs[1].set_xlabel('Uncertainty Threshold')
-    axs[1].set_ylabel('p(uncertain|inaccurate)')
-    axs[1].legend(frameon=True)
-    axs[1].set_ylim(-0.05, 1.05)
-
-    axs[2].plot(thresholds, pavpu, 'b.-', label=f"AU-PAvPU: {au_pavpu:.3f}")
-    axs[2].set_xlabel('Uncertainty Threshold')
-    axs[2].set_ylabel('PAVPU')
-    axs[2].legend(frameon=True)
-    axs[2].set_ylim(-0.05, 1.05)
-
-    if gen_new:
-        if title is not None:
-            fig.suptitle(title)
-        fig.tight_layout()
-
-        return fig
-    else:
-        pass
-
-
 def plot_ece(preds, labels, title=None, exclude=None, n_bins=20, ax=None):
     conf, acc, ece = expected_calibration_error(preds, labels, exclude=exclude, n_bins=n_bins)
 
@@ -117,8 +79,3 @@ def plot_pr(ax, rec, pr, aupr, no_skill):
     ax.tick_params(axis='x', which='both', bottom=True)
     ax.tick_params(axis='y', which='both', left=True)
     ax.legend()
-
-
-def add_labels(x, y, ax):
-    for i in range(len(x)):
-        ax.text(i, y[i], f"{y[i]:.3f}", ha='center')

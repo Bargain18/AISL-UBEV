@@ -1,0 +1,12 @@
+type: 'baseline'
+backbone: 'cvt'
+dataset: 'carla'
+logdir: 'outputs/carla/cvt_baseline'
+gpus: [0, 1]
+batch_size: 4
+num_workers: 2
+weight_decay: 0.0000001
+learning_rate: 0.001
+num_epochs: 20
+loss: ce
+pos_class: vehicle

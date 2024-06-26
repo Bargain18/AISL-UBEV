@@ -17,3 +17,7 @@ dist
 mmdet*
 *.npy
 *.pt
+data/
+carla_data/
+birds_roads_segmentation2-BEV/
+birds_cars_segmentation-VIS/

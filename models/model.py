@@ -2,18 +2,14 @@ import torch
 import torch.nn as nn
 
 from models.backbones.cvt.cross_view_transformer import CrossViewTransformer
-from models.backbones.fiery.fiery import Fiery
-from models.backbones.lss.lift_splat_shoot import LiftSplatShoot
 
 backbones = {
-    'fiery': Fiery,
     'cvt': CrossViewTransformer,
-    'lss': LiftSplatShoot
 }
 
 
 class Model(nn.Module):
-    def __init__(self, devices, backbone='fiery', n_classes=4, opt=None, scaler=None, loss_type='ce', weights=None):
+    def __init__(self, devices, backbone='cvt', n_classes=4, opt=None, scaler=None, loss_type='ce', weights=None):
         super(Model, self).__init__()
 
         self.device = devices[0]
@@ -43,17 +39,9 @@ class Model(nn.Module):
             )
 
     @staticmethod
-    def aleatoric(x):
-        pass
-
-    @staticmethod
-    def epistemic(x):
-        pass
-
-    @staticmethod
     def activate(x):
         pass
-
+    
     @staticmethod
     def loss(x, gt):
         pass
@@ -103,4 +91,4 @@ class Model(nn.Module):
         return outs, preds, loss
 
     def forward(self, images, intrinsics, extrinsics):
-        pass
+        return self.backbone(images, intrinsics, extrinsics)

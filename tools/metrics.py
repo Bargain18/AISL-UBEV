@@ -2,6 +2,7 @@ import torch
 import torchmetrics
 from sklearn.calibration import *
 from sklearn.metrics import *
+import numpy as np
 
 
 def bin_predictions(y_score, y_true, n_bins=10):
@@ -52,7 +53,7 @@ def get_iou(preds, labels, exclude=None):
     pmax = preds.argmax(dim=1).unsqueeze(1)
     lmax = labels.argmax(dim=1).unsqueeze(1)
 
-    with torch.no_grad():
+    with torch.inference_mode():
         for i in range(classes):
             p = (pmax == i).bool()
             l = (lmax == i).bool()
@@ -65,17 +66,6 @@ def get_iou(preds, labels, exclude=None):
             union = (p | l).sum().float().item()
             iou[i] = intersect / union if union > 0 else 0
     return iou
-
-
-def unc_iou(y_score, y_true, thresh=.5):
-    pred = (y_score > thresh).bool()
-    target = y_true.bool()
-
-    intersect = (pred & target).sum()
-    union = (pred | target).sum()
-
-    return intersect / union
-
 
 def patch_metrics(uncertainty_scores, uncertainty_labels, quantile=False):
     thresholds = np.linspace(0, 1, 11)

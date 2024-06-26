@@ -1,0 +1,8 @@
+type: 'baseline'
+backbone: 'cvt'
+dataset: 'carla'
+logdir: 'outputs/carla/cvt_baseline'
+gpus: [0,1]
+batch_size: 4
+num_workers: 2
+pretrained: 'outputs/carla/cvt_baseline/19.pt'
