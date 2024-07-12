@@ -15,7 +15,9 @@ def ResNetBottleNeck(c):
 
 
 H = 224
-W = 480
+W = 400
+# H = 900
+# W = 1600
 O = 46
 
 

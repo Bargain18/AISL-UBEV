@@ -33,7 +33,6 @@ def train():
         "train", dataroot, config['pos_class'],
         batch_size=config['batch_size'],
         num_workers=config['num_workers'],
-        is_train=True,
         seed=config['seed']
     )
 
@@ -41,7 +40,6 @@ def train():
         "val", dataroot, config['pos_class'],
         batch_size=config['batch_size'],
         num_workers=config['num_workers'],
-        is_train=False,
         seed=config['seed']
     )
 
@@ -58,7 +56,7 @@ def train():
         lr=config['learning_rate'],
         weight_decay=config['weight_decay']
     )
-    
+
     # model.opt = torch.optim.SGD(
     #     model.parameters(),
     #     lr=config['learning_rate'],
@@ -120,6 +118,7 @@ def train():
         writer.add_scalar('train/epoch', epoch, step)
 
         for images, intrinsics, extrinsics, labels in tqdm(train_loader):
+            
             t_0 = time()
 
             outs, preds, loss = model.train_step(images, intrinsics, extrinsics, labels)
@@ -129,22 +128,22 @@ def train():
             if scheduler is not None:
                 scheduler.step()
 
-            if step % 10 == 0:
+            if step % 25 == 0:
                 print(f"[{epoch}] {step} {loss.item()} {time()-t_0}")
 
                 writer.add_scalar('train/step_time', time() - t_0, step)
                 writer.add_scalar('train/loss', loss, step)
 
+            if step % 50 == 0:
                 save_pred(preds, labels, config['logdir'])
 
-            if step % 50 == 0:
                 iou = get_iou(preds.cpu(), labels)
 
                 print(f"[{epoch}] {step}", "IOU: ", iou)
 
                 for i in range(0, n_classes):
                     writer.add_scalar(f'train/{classes[i]}_iou', iou[i], step)
-
+                                
         model.eval()
 
         predictions, ground_truth, raw = run_loader(
@@ -194,14 +193,13 @@ if __name__ == "__main__":
     parser.add_argument('-p', '--pretrained', required=False, type=str)
     parser.add_argument('-o', '--ood', default=False, action='store_true')
     parser.add_argument('-e', '--num_epochs', required=False, type=int)
-    parser.add_argument('-c', '--pos_class',
-                        default="vehicle", required=False, type=str)
+    parser.add_argument('-c', '--pos_class', required=False, type=str)
     parser.add_argument('-f', '--fast', default=False, action='store_true')
 
-    parser.add_argument('--seed', default=0, required=False, type=int)
+    parser.add_argument('--seed', default=6282007, required=False, type=int)
     parser.add_argument('--stable', default=False, action='store_true')
 
-    parser.add_argument('--loss', default="ce", required=False, type=str)
+    parser.add_argument('--loss', required=False, type=str)
     parser.add_argument('--gamma', required=False, type=float)
     parser.add_argument('--beta', required=False, type=float)
     parser.add_argument('--ol', required=False, type=float)
@@ -242,6 +240,6 @@ if __name__ == "__main__":
         torch.inverse(torch.ones((1, 1), device=gpu))
 
     split = args.split
-    dataroot = "data"
+    dataroot = "media/carla_shares_data"
 
     train()

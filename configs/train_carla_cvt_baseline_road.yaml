@@ -1,0 +1,12 @@
+type: 'baseline'
+backbone: 'cvt'
+dataset: 'carla'
+logdir: 'outputs/carla/cvt_baseline/road3'
+gpus: [0, 1, 2, 3]
+batch_size: 32
+num_workers: 32
+weight_decay: 0.0000001
+learning_rate: 0.001
+num_epochs: 4
+loss: ce
+pos_class: road

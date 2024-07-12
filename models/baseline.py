@@ -15,8 +15,11 @@ class Baseline(Model):
         return torch.softmax(logits, dim=1)
 
     def loss(self, logits, target, reduction='mean'):
+        # ce = ce_loss(logits, target, weights=self.weights)
+        # focal = focal_loss(logits, target, weights=self.weights, n=self.gamma)
+        # return (ce + focal).mean()
         if self.loss_type == 'ce':
-            A = ce_loss(logits, target, weights=self.weights)
+            A = bce_loss(logits, target, weights=self.weights)
         elif self.loss_type == 'focal':
             A = focal_loss(logits, target, weights=self.weights, n=self.gamma)
         else:

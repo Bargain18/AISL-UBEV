@@ -40,7 +40,7 @@ def eval(config, set, split, dataroot):
     classes, n_classes, weights = change_params(config)
 
     loader = datasets[config['dataset']](
-        'val', dataroot, config['pos_class'],
+        'test', dataroot, config['pos_class'],
         batch_size=config['batch_size'],
         num_workers=config['num_workers'],
     )
@@ -62,7 +62,7 @@ def eval(config, set, split, dataroot):
     model.eval()
 
     print("--------------------------------------------------")
-    print(f"Running eval on {split}")
+    # print(f"Running eval on {split}")
     print(f"Using GPUS: {config['gpus']}")
     print(f"Loader: {len(loader.dataset)}")
     print(f"Batch size: {config['batch_size']}")
@@ -97,8 +97,8 @@ if __name__ == "__main__":
     parser.add_argument('-g', '--gpus', nargs='+', required=False, type=int)
     parser.add_argument('-l', '--logdir', required=False, type=str)
     parser.add_argument('-b', '--batch_size', required=False, type=int)
-    parser.add_argument('--split', default="mini", required=False, type=str)
-    parser.add_argument('-s', '--set', default="val", required=False, type=str)
+    parser.add_argument('--split', default="test", required=False, type=str)
+    parser.add_argument('-s', '--set', default="test", required=False, type=str)
     parser.add_argument('-p', '--pretrained', required=False, type=str)
     parser.add_argument('-e', '--ensemble', nargs='+',
                         required=False, type=str)
@@ -107,7 +107,7 @@ if __name__ == "__main__":
     parser.add_argument('--num_workers', required=False, type=int)
     parser.add_argument('--pseudo', default=False, action='store_true')
     parser.add_argument('-c', '--pos_class',
-                        default="vehicle", required=False, type=str)
+                        default="road", required=False, type=str)
 
     args = parser.parse_args()
 
@@ -132,8 +132,8 @@ if __name__ == "__main__":
 
     print(f"IOU: {iou}, Brier: {brier:.5f}, ECE: {ece:.5f}")
 
-    ece_graph.savefig(os.path.join(config['logdir'], "ece_calib.png"))
-    ece_graph.savefig(os.path.join(
-        config['logdir'], "ece_calib.pdf"), format="pdf")
+    # ece_graph.savefig(os.path.join(config['logdir'], "ece_calib.png"))
+    # ece_graph.savefig(os.path.join(
+    #     config['logdir'], "ece_calib.pdf"), format="pdf")
 
-    print(f"Graphs saved to {config['logdir']}")
+    # print(f"Graphs saved to {config['logdir']}")

@@ -2,69 +2,72 @@ import json
 import math
 import os
 import random
+import re
+import subprocess as sp
+import cv2
 
 import torchvision
 from torch.utils.data import Subset, DataLoader
 
 from tools.geometry import *
+from PIL import Image, ImageFile
 
 
 class CarlaDataset(torch.utils.data.Dataset):
-    def __init__(self, data_path, is_train, pos_class):
-        self.is_train = is_train
+    def __init__(self, data_path, set, pos_class):
+        ImageFile.LOAD_TRUNCATED_IMAGES = True
+
+        self.set = set  # 'train', 'val', 'test'
         self.pos_class = pos_class
 
-        self.data_path = data_path
-        self.mode = 'train' if self.is_train else 'val'
+        self.data_path = data_path + '/carla_shares_data'
+        self.json_path = '/home/rxr230031/media/carla_shares_data/new_jsons'
 
-        self.label_paths = []
-        with open(os.path.join(data_path, self.mode) + '.txt', 'r') as f:
-            self.label_paths = f.readlines()
-            
-        # self.ticks = len(os.listdir(os.path.join(self.data_path, self.mode,  'agents/0/back_camera')))
-        self.ticks = 100
+        self.label_root = os.path.join(self.data_path, 'labels_', 'agents/')
 
-        
-        self.offset = 0
+        # self.ticks = len(os.listdir(os.path.join(self.data_path, 'agents/0/back_camera')))
+        self.data = open(os.path.join(data_path, self.set+'.txt'), 'r').readlines()
+        self.length = len(self.data)
+        # self.agent_num = len(os.listdir(os.path.join(self.data_path, 'agents')))
+        self.offset = 5132
 
-        self.to_tensor = torchvision.transforms.Compose(
-            [torchvision.transforms.ToTensor()])
+        self.to_tensor = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
 
-        bev_resolution, bev_start_position, bev_dimension = calculate_birds_eye_view_parameters(
-            [-50.0, 50.0, 0.5], [-50.0, 50.0, 0.5], [-10.0, 10.0, 20.0]
-        )
+        # bev_resolution, bev_start_position, bev_dimension = calculate_birds_eye_view_parameters(
+        #     [-50.0, 50.0, 0.5], [-50.0, 50.0, 0.5], [-10.0, 10.0, 20.0]
+        # )
 
-        self.bev_resolution, self.bev_start_position, self.bev_dimension = (
-            bev_resolution, bev_start_position, bev_dimension
-        )
+        # self.bev_resolution, self.bev_start_position, self.bev_dimension = (
+        #     bev_resolution, bev_start_position, bev_dimension
+        # )
 
-    def get_input_data(self, img, agent_path):
+        self.bev_dimension = [200, 200, 1]
+
+    def get_input_data(self, town, img):
         images = []
         intrinsics = []
         extrinsics = []
 
-        with open(os.path.join(agent_path, 'sensors.json'), 'r') as f:
+        with open(os.path.join(self.json_path, town), 'r') as f:
             sensors = json.load(f)
 
         for sensor_name, sensor_info in sensors['sensors'].items():
             if sensor_info["sensor_type"] == "sensor.camera.rgb" and sensor_name != "birds_view_camera":
+                image = Image.open(os.path.join(self.data_path, town, 'agents/0', sensor_name, img))
+                image = image.resize((400, 225))
 
-                # image = Image.open(os.path.join(agent_path + sensor_name, f'{index}.png'))
-
-                # intrinsic = torch.tensor(sensor_info["intrinsic"])
-
-                image = Image.open(os.path.join(
-                    agent_path + sensor_name, f'{img}'))
+                intrinsic = torch.tensor(sensor_info["intrinsic"])
 
                 intrinsic = np.identity(3)
                 sensor_opts = sensor_info['sensor_options']
                 intrinsic[0, 2] = sensor_opts['image_size_x'] / 2.0
                 intrinsic[1, 2] = sensor_opts['image_size_y'] / 2.0
-                intrinsic[0, 0] = sensor_opts['image_size_x'] / (2.0 * np.tan(sensor_opts['fov'] * np.pi / 360.0))
+                intrinsic[0, 0] = sensor_opts['image_size_x'] / \
+                    (2.0 * np.tan(sensor_opts['fov'] * np.pi / 360.0))
                 intrinsic[1, 1] = intrinsic[0, 0]
-                
+
                 intrinsic = torch.FloatTensor(intrinsic)
-                
+
                 translation = np.array(sensor_info["transform"]["location"])
                 rotation = sensor_info["transform"]["rotation"]
 
@@ -91,41 +94,60 @@ class CarlaDataset(torch.utils.data.Dataset):
 
         return images, intrinsics, extrinsics
 
-    def get_label(self, label_path, index=None):
-        # label_r = Image.open(os.path.join(agent_path + "bev_semantic", f'{index}.png'))
-        label_r = Image.open(os.path.join(self.data_path, 'bev_labels', label_path))
+    def get_label(self, town, img):
+        label_r = Image.open(os.path.join(self.data_path, town, 'agents/0/birds_view_semantic_camera', img))
+        label_r = label_r.resize((200, 200))
         label = np.array(label_r)
         label_r.close()
 
-        empty = np.ones(self.bev_dimension[:2])
 
-        # road = mask(label, (128, 64, 128))
-        # lane = mask(label, (157, 234, 50))
-        # vehicles = mask(label, (0, 0, 142))
+        
+        # label_r = cv2.imread(os.path.join(self.label_root, str(
+        #     agent_num), self.pos_class, f'{index}.png'))
+        # label_r = cv2.cvtColor(label_r, cv2.COLOR_BGR2GRAY)
+
+        # label = np.array(label_r)
+        # label[label == 255] = 1
+
+        background = np.ones(self.bev_dimension[:2])
+
+        road = mask(label, (16, 0, 255))
+        lanes = mask(label, (1, 255, 0))
+        vehicles = mask(label, (255, 1, 0))
 
         # if np.sum(vehicles) < 5:
-        #     lane = mask(label, (50, 234, 157))
+        #     lane = mask(label, (1, 255, 0))
         #     vehicles = mask(label, (142, 0, 0))
 
-        # if self.pos_class == 'vehicle':
-        #     empty[vehicles == 1] = 0
-        #     label = np.stack((vehicles, empty))
+        if self.pos_class == 'vehicle':
+            # add secondary center label
+            # center_img = cv2.imread(os.path.join(self.label_root, str(
+            # agent_num), 'center', f'{index}.png'))
+            # center_img = cv2.cvtColor(center_img, cv2.COLOR_BGR2GRAY)
+            # center_img[center_img==255] = 1
+            # label = np.stack((label, center_img))
+            
+            background[vehicles == 1] = 0
 
-        # elif self.pos_class == 'road':
-        #     road[lane == 1] = 1
-        #     road[vehicles == 1] = 1
+            label = np.stack((vehicles, background))            
+            # label = label.astype(np.float32)
 
-        #     # this is a refinement step to remove some impurities in the label caused by small objects
-        #     road = (road * 255).astype(np.uint8)
-        #     kernel_size = 2
+        elif self.pos_class == 'road':
+            road[lanes == 1] = 1
+            road[vehicles == 1] = 1
+            # label = np.stack((label, background))
 
-        #     kernel = np.ones((kernel_size, kernel_size), np.uint8)
+            # this is a refinement step to remove some impurities in the label caused by small objects
+            road = (road * 255).astype(np.uint8)
+            kernel_size = 2
 
-        #     road = cv2.dilate(road, kernel, iterations=1)
-        #     road = cv2.erode(road, kernel, iterations=1)
-        #     empty[road == 1] = 0
+            kernel = np.ones((kernel_size, kernel_size), np.uint8)
 
-        #     label = np.stack((road, empty))
+            road = cv2.dilate(road, kernel, iterations=1)
+            road = cv2.erode(road, kernel, iterations=1)
+
+            background[road == 1] = 0
+            label = np.stack((road, background))
         # elif self.pos_class == 'lane':
         #     empty[lane == 1] = 0
 
@@ -135,34 +157,38 @@ class CarlaDataset(torch.utils.data.Dataset):
         #     empty[lane == 1] = 0
         #     empty[road == 1] = 0
         #     label = np.stack((vehicles, road, lane, empty))
-        label = np.stack((label, empty))
+        # label = np.stack((label, empty))
         return label
 
     def __len__(self):
-        return len(self.label_paths)
+        # return self.ticks * self.agent_num 
+        return self.length
+    
+    def get_gpu_memory(self):
+        command = "nvidia-smi --query-gpu=memory.free --format=csv"
+        memory_free_info = sp.check_output(command.split()).decode('ascii').split('\n')[:-1][1:]
+        memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
+        return memory_free_values
 
     def __getitem__(self, index):
         # agent_number = math.floor(index / self.ticks)
-        # agent_path = os.path.join(self.data_path, self.mode, f"agents/{agent_number}/")
+        # agent_number = 0
+        # agent_path = os.path.join(self.data_path, f"agents/{agent_number}/")
+        
         # index = (index + self.offset) % self.ticks
+        # index = (index % self.ticks)*10 + self.offset
 
-        # images, intrinsics, extrinsics = self.get_input_data(index, agent_path)
-        # labels = self.get_label(index, agent_path)
-        
-                
-        label_path = f'{self.label_paths[index].strip()}'
-        town, img = label_path.split('/')
-        agent_path = os.path.join(self.data_path, f"bev_imgs/{town}/agents/0/")
-        
-        images, intrinsics, extrinsics = self.get_input_data(img, agent_path)
-        
-        labels = self.get_label(label_path)
+        town, img = self.data[index % self.length].strip().split()
+        # print(self.get_gpu_memory())
+
+        images, intrinsics, extrinsics = self.get_input_data(town, img)
+        labels = self.get_label(town, img)
 
         return images, intrinsics, extrinsics, labels
 
 
-def compile_data(set, dataroot, pos_class, batch_size=4, num_workers=4, is_train=False, seed=0):
-    dataset = CarlaDataset(dataroot, is_train, pos_class)
+def compile_data(set, dataroot, pos_class, batch_size=4, num_workers=4, seed=0):
+    dataset = CarlaDataset(dataroot, set, pos_class)
     random.seed(seed)
     torch.cuda.manual_seed(seed)
     torch.manual_seed(seed)
@@ -174,6 +200,6 @@ def compile_data(set, dataroot, pos_class, batch_size=4, num_workers=4, is_train
         num_workers=num_workers,
         shuffle=True,
         drop_last=True,
-        pin_memory=False)
+        pin_memory=True)
 
     return loader

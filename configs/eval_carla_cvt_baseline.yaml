@@ -1,8 +1,9 @@
 type: 'baseline'
 backbone: 'cvt'
 dataset: 'carla'
-logdir: 'outputs/carla/cvt_baseline'
-gpus: [0,1]
-batch_size: 4
-num_workers: 2
-pretrained: 'outputs/carla/cvt_baseline/19.pt'
+logdir: 'outputs/carla/cvt_baseline/vehicle1'
+gpus: [0,1,2,3]
+batch_size: 16
+num_workers: 16
+pretrained: 'outputs/carla/cvt_baseline/vehicle1/19.pt'
+pos_class: vehicle

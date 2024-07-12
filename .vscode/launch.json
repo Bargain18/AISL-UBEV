@@ -1,24 +1,29 @@
 {
     "version": "0.2.0",
     "configurations": [
-        
         {
-            "name": "Train Carla",
+            "name": "Train Carla Road",
             "type": "debugpy",
             "request": "launch",
             "program": "train.py",
             "console": "integratedTerminal",
-            "args": "./configs/train_carla_cvt_baseline.yaml"
+            "args": "./configs/train_carla_cvt_baseline_road.yaml -c road"
         },
-
+        {
+            "name": "Train Carla Vehicle",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "train.py",
+            "console": "integratedTerminal",
+            "args": "./configs/train_carla_cvt_baseline_vehicle.yaml -c vehicle"
+        },
         {
             "name": "Eval Carla",
             "type": "debugpy",
             "request": "launch",
             "program": "eval.py",
             "console": "integratedTerminal",
-            "args": "./configs/eval_carla_cvt_baseline.yaml"
+            "args": "./configs/eval_carla_cvt_baseline.yaml -c road"
         }
-        
     ]
 }

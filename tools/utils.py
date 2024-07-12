@@ -48,6 +48,7 @@ def change_params(config):
         weights = torch.tensor([2., 1.])
     elif config['pos_class'] == 'road':
         n_classes, classes = 2, ["road", "background"]
+        # n_classes, classes = 1, ["road"]
         weights = torch.tensor([1., 1.])
     elif config['pos_class'] == 'lane':
         n_classes, classes = 2, ["lane", "background"]
@@ -92,6 +93,7 @@ def map_rgb(onehot, ego=False):
 
     return rgb
 
+
 def save_pred(pred, label, out_path, ego=False):
     if pred.shape[1] != 2:
         pred = map_rgb(pred[0], ego=ego)
@@ -101,8 +103,15 @@ def save_pred(pred, label, out_path, ego=False):
 
         return pred, label
     else:
-        cv2.imwrite(os.path.join(out_path, "pred.png"), pred[0, 0].detach().cpu().numpy() * 255)
-        cv2.imwrite(os.path.join(out_path, "label.png"), label[0,0].detach().cpu().numpy() * 255)
+        cv2.imwrite(os.path.join(out_path, "pred.png"),
+                    pred[0, 0].detach().cpu().numpy() * 255)
+        cv2.imwrite(os.path.join(out_path, "label.png"),
+                    label[0, 0].detach().cpu().numpy() * 255)
+        cv2.imwrite(os.path.join(out_path, "pred1.png"),
+                    pred[0, 1].detach().cpu().numpy() * 255)
+        cv2.imwrite(os.path.join(out_path, "label1.png"),
+                    label[0, 1].detach().cpu().numpy() * 255)
+
 
 def get_config(args):
     with open(args.config, 'r') as file:
@@ -124,7 +133,8 @@ def get_available_gpus(required_gpus=2):
         handle = pynvml.nvmlDeviceGetHandleByIndex(i)
         compute_procs = pynvml.nvmlDeviceGetComputeRunningProcesses(handle)
 
-        user_procs = [proc for proc in compute_procs if get_username_from_pid(proc.pid) == username]
+        user_procs = [proc for proc in compute_procs if get_username_from_pid(
+            proc.pid) == username]
         if not user_procs:
             available_gpus.append(i)
 
@@ -133,9 +143,11 @@ def get_available_gpus(required_gpus=2):
 
     return available_gpus[:required_gpus]
 
+
 def get_username_from_pid(pid):
     try:
-        proc = subprocess.run(['ps', '-o', 'user=', '-p', str(pid)], capture_output=True, text=True)
+        proc = subprocess.run(
+            ['ps', '-o', 'user=', '-p', str(pid)], capture_output=True, text=True)
         return proc.stdout.strip()
     except subprocess.CalledProcessError:
         return None

@@ -32,10 +32,15 @@ def focal_loss(logits, target, weights=None, n=2):
     log_pt = log_p[all_rows, target]
 
     pt = log_pt.exp()
-    focal_term = (1 - pt + 1e-12) ** n
-
-    loss = focal_term * ce
+    focal_term = (1 - pt + 1e-12) ** 2
+    alpha = 1
+    loss = focal_term * ce * alpha
     return loss.view(-1, 200, 200)
+
+    # BCE_loss = F.binary_cross_entropy_with_logits(logits, target, reduction='none')
+    # pt = torch.exp(-BCE_loss) # prevents nans when probability 0
+    # F_loss = 0.1 * (1-pt)**2 * BCE_loss
+    # return F_loss.mean()
 
 
 def focal_loss_o(logits, target, weights=None, n=2):
